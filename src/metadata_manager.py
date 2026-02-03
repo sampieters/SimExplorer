@@ -41,16 +41,12 @@ def load_item_metadata(dataset_name, dataset_obj):
                             df = pd.read_csv(f, sep='::', header=None, engine='python', encoding='latin-1', usecols=[0, 1])
                             metadata = dict(zip(df[0], df[1]))
 
-        elif "MovieLens25M" in dataset_name:
-            zip_path = os.path.join(path, "ml-25m.zip")
-            if os.path.exists(zip_path):
-                with zipfile.ZipFile(zip_path, 'r') as z:
-                    # movieId,title,genres
-                    target = [n for n in z.namelist() if n.endswith('movies.csv')]
-                    if target:
-                        with z.open(target[0]) as f:
-                            df = pd.read_csv(f)
-                            metadata = dict(zip(df['movieId'], df['title']))
+        elif any(name in dataset_name for name in ["Adressa", "MillionSongDataset", "TasteProfile"]):
+            # These custom datasets store string -> int mapping in item_mapping_ (or item_mapping if cached)
+            mapping = getattr(dataset_obj, 'item_mapping_', getattr(dataset_obj, 'item_mapping', None))
+            if mapping:
+                # Map integer ID back to the original string ID (songId or id)
+                metadata = {v: k for k, v in mapping.items()}
 
     except Exception as e:
         st.warning(f"Could not load metadata for {dataset_name}: {e}")

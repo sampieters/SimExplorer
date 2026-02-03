@@ -29,24 +29,36 @@ def get_filter_args(name):
         
     return args
 
+import streamlit as st
+
+@st.cache_data
+def _apply_filter_cached(df, filter_name, params_tuple):
+    """
+    Internal cached function. params_tuple is a tuple of (key, value) pairs.
+    """
+    cls = get_filter_class(filter_name)
+    kwargs = dict(params_tuple)
+    filter_instance = cls(**kwargs)
+    return filter_instance.apply(df)
+
 def apply_filter(df, filter_name, dataset, **kwargs):
     """
-    Applies a single filter to the dataframe.
+    Applies a single filter to the dataframe, utilizing caching.
     """
     cls = get_filter_class(filter_name)
     if not cls:
         raise ValueError(f"Filter {filter_name} not found")
         
-    # Auto-fill ix if present in dataset and expected by filter
     sig = inspect.signature(cls.__init__)
     
+    # Auto-fill ix if present in dataset and expected by filter
     if 'item_ix' in sig.parameters and 'item_ix' not in kwargs:
-        if hasattr(dataset, 'ITEM_IX'):
-            kwargs['item_ix'] = dataset.ITEM_IX
+        val = getattr(dataset, 'ITEM_IX', None)
+        if val: kwargs['item_ix'] = val
             
     if 'user_ix' in sig.parameters and 'user_ix' not in kwargs:
-         if hasattr(dataset, 'USER_IX'):
-            kwargs['user_ix'] = dataset.USER_IX
+        val = getattr(dataset, 'USER_IX', None)
+        if val: kwargs['user_ix'] = val
             
     # Explicit Casting based on signature
     for param_name, param in sig.parameters.items():
@@ -54,20 +66,20 @@ def apply_filter(df, filter_name, dataset, **kwargs):
             anno = param.annotation
             val = kwargs[param_name]
             try:
-                # Handle types (both direct and string representations)
                 anno_str = str(anno).lower()
                 if 'int' in anno_str:
                     kwargs[param_name] = int(val)
                 elif 'float' in anno_str:
                     kwargs[param_name] = float(val)
                 elif 'bool' in anno_str:
-                    # Handle string "true"/"false" if they somehow ended up here
                     if isinstance(val, str):
                         kwargs[param_name] = val.lower() in ['true', '1', 't', 'y', 'yes']
                     else:
                         kwargs[param_name] = bool(val)
             except (ValueError, TypeError):
-                pass # Fallback to original value if casting fails
+                pass 
             
-    filter_instance = cls(**kwargs)
-    return filter_instance.apply(df)
+    # Convert kwargs to a stable hashable format for caching
+    params_tuple = tuple(sorted(kwargs.items()))
+    
+    return _apply_filter_cached(df, filter_name, params_tuple)
