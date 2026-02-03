@@ -1,0 +1,7 @@
+recpack
+streamlit
+pandas
+scipy
+matplotlib
+numpy
+plotly
